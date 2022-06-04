@@ -1,0 +1,9 @@
+project: ebpf-verifier
+target: check
+testsuite:
+  - file://test
+
+cmds:
+  - cmd: /verifier/check -s @@
+    env:
+      DISABLE_SMOKETEST: '1'
