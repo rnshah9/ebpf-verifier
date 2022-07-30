@@ -4,6 +4,6 @@ testsuite:
   - file://test
 
 cmds:
-  - cmd: /verifier/check -s @@
+  - cmd: /check -s @@
     env:
       DISABLE_SMOKETEST: '1'

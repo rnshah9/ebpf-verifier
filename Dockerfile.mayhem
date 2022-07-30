@@ -10,13 +10,6 @@ RUN mkdir build
 WORKDIR /verifier/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make -j $(nproc)
-WORKDIR /verifier
 
-RUN mkdir -p /deps
-RUN ldd /verifier/check | tr -s '[:blank:]' '\n' | grep '^/' | xargs -I % sh -c 'cp % /deps;'
-
-FROM ubuntu:20.04 as package
-
-COPY --from=builder /deps /deps
-COPY --from=builder /verifier/check /verifier/check
-ENV LD_LIBRARY_PATH=/deps
+FROM ubuntu:22.04 as package
+COPY --from=builder /verifier/check /
