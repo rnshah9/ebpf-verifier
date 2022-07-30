@@ -11,5 +11,5 @@ WORKDIR /verifier/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release
 RUN make -j $(nproc)
 
-FROM ubuntu:22.04 as package
+FROM ubuntu:20.04 as package
 COPY --from=builder /verifier/check /
