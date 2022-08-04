@@ -12,6 +12,9 @@ void btf_parse_line_information(const std::vector<uint8_t>& btf, const std::vect
                                 btf_line_info_visitor visitor) {
     std::map<size_t, std::string> string_table;
 
+    if (btf.size() < sizeof(btf_header_t)) {
+        throw std::runtime_error("Invalid .BTF section - section too small");
+    }
     auto btf_header = reinterpret_cast<const btf_header_t*>(btf.data());
     if (btf_header->magic != BTF_HEADER_MAGIC) {
         throw std::runtime_error("Invalid .BTF section - wrong magic");
@@ -36,11 +39,17 @@ void btf_parse_line_information(const std::vector<uint8_t>& btf, const std::vect
     }
 
     for (size_t offset = string_table_start; offset < string_table_end;) {
-        std::string value(reinterpret_cast<const char*>(btf.data()) + offset);
+        const char* string_start = reinterpret_cast<const char*>(btf.data()) + offset;
+        size_t string_length = strnlen(string_start, btf.size() - offset);
+        std::string value(string_start, string_length);
         size_t string_offset =
             offset - static_cast<size_t>(btf_header->str_off) - static_cast<size_t>(btf_header->hdr_len);
         offset += value.size() + 1;
         string_table.insert(std::make_pair(string_offset, value));
+    }
+
+    if (btf_ext.size() < sizeof(btf_ext_header_t)) {
+        throw std::runtime_error("Invalid .BTF.ext section - section too small");
     }
     auto bpf_ext_header = reinterpret_cast<const btf_ext_header_t*>(btf_ext.data());
     if (bpf_ext_header->magic != BTF_HEADER_MAGIC) {
@@ -67,8 +76,18 @@ void btf_parse_line_information(const std::vector<uint8_t>& btf, const std::vect
     uint32_t line_info_record_size =
         *reinterpret_cast<const uint32_t*>(btf_ext.data() + line_info_start);
 
+    if (line_info_record_size < sizeof(bpf_line_info_t)) {
+        throw std::runtime_error(std::string("Invalid .BTF section - invalid line info record size"));
+    }
+
     for (size_t offset = line_info_start + sizeof(line_info_record_size); offset < line_info_end;) {
         auto section_info = reinterpret_cast<const btf_ext_info_sec_t*>(btf_ext.data() + offset);
+        size_t section_info_size = offsetof(btf_ext_info_sec_t, data) + static_cast<size_t>(line_info_record_size) *
+                                                                            static_cast<size_t>(section_info->num_info);
+        if ((offset + section_info_size) > line_info_end) {
+            throw std::runtime_error(std::string("Invalid .BTF section - invalid size"));
+        }
+
         auto section_name = string_table.find(section_info->sec_name_off);
         if (section_name == string_table.end()) {
             throw std::runtime_error(std::string("Invalid .BTF section - invalid string offset ") +
@@ -90,7 +109,6 @@ void btf_parse_line_information(const std::vector<uint8_t>& btf, const std::vect
             visitor(section_name->second, btf_line_info->insn_off, file_name_string, source_line_string,
                     BPF_LINE_INFO_LINE_NUM(btf_line_info->line_col), BPF_LINE_INFO_LINE_COL(btf_line_info->line_col));
         }
-        offset += offsetof(btf_ext_info_sec_t, data) +
-                  static_cast<size_t>(line_info_record_size) * static_cast<size_t>(section_info->num_info);
+        offset += section_info_size;
     }
 }

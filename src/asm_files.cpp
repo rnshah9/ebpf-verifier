@@ -79,7 +79,7 @@ static size_t parse_map_sections(const ebpf_verifier_options_t* options, const e
 
         if (map_count > 0) {
             map_record_size = s->get_size() / map_count;
-            if (s->get_data() == nullptr) {
+            if ((s->get_data() == nullptr) || (map_record_size == 0)) {
                 throw std::runtime_error(std::string("bad maps section"));
             }
             if (s->get_size() % map_record_size != 0) {
@@ -120,6 +120,13 @@ vector<raw_program> read_elf(std::istream& input_stream, const std::string& path
         throw std::runtime_error(string("No symbol section found in ELF file ") + path);
     }
 
+    // Make sure the ELFIO library will be able to parse the symbol section correctly.
+    auto expected_entry_size =
+        (reader.get_class() == ELFIO::ELFCLASS32) ? sizeof(ELFIO::Elf32_Sym) : sizeof(ELFIO::Elf64_Sym);
+    if (symbol_section->get_entry_size() != expected_entry_size) {
+        throw std::runtime_error(string("Invalid symbol section found in ELF file ") + path);
+    }
+
     ELFIO::const_symbol_section_accessor symbols{reader, symbol_section};
     size_t map_record_size = parse_map_sections(options, platform, reader, info.map_descriptors, map_section_indices, symbols);
 
@@ -147,9 +154,9 @@ vector<raw_program> read_elf(std::istream& input_stream, const std::string& path
         if (name != ".text" && name.find('.') == 0) {
             continue;
         }
-        info.type = platform->get_program_type(name, path);
         if ((section->get_size() == 0) || (section->get_data() == nullptr))
             continue;
+        info.type = platform->get_program_type(name, path);
         raw_program prog{path, name, vector_of<ebpf_inst>(*section), info};
         auto prelocs = reader.sections[string(".rel") + name];
         if (!prelocs)
@@ -162,7 +169,7 @@ vector<raw_program> read_elf(std::istream& input_stream, const std::string& path
             ELFIO::const_relocation_section_accessor reloc{reader, prelocs};
             ELFIO::Elf64_Addr offset;
             ELFIO::Elf_Word symbol{};
-            unsigned char type;
+            unsigned type;
             ELFIO::Elf_Sxword addend;
             // Fetch and store relocation count locally to permit static
             // analysis tools to correctly reason about the code below.

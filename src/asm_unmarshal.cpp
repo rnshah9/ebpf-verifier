@@ -248,7 +248,7 @@ struct Unmarshaller {
 
     auto makeLddw(ebpf_inst inst, int32_t next_imm, const vector<ebpf_inst>& insts, pc_t pc) -> Instruction {
         if (pc >= insts.size() - 1)
-            note("incomplete LDDW");
+            throw InvalidInstruction(pc, "incomplete LDDW");
         if (inst.src > 1 || inst.dst > R10_STACK_POINTER || inst.offset != 0)
             note("LDDW uses reserved fields");
 
@@ -350,9 +350,9 @@ struct Unmarshaller {
         default: {
             pc_t new_pc = pc + 1 + inst.offset;
             if (new_pc >= insts.size())
-                note("jump out of bounds");
+                throw InvalidInstruction(pc, "jump out of bounds");
             else if (insts[new_pc].opcode == 0)
-                note("jump to middle of lddw");
+                throw InvalidInstruction(pc, "jump to middle of lddw");
 
             auto cond = inst.opcode == INST_OP_JA ? std::optional<Condition>{}
                                                   : Condition{
